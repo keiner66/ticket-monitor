@@ -434,10 +434,29 @@ def main():
     test = "--test" in args
     cloud = "--cloud" in args
 
-    if not os.path.exists(CONFIG_PATH):
+    if cloud:
+        # 云端模式: 全部配置来自环境变量, 不依赖 config.json
+        required = ("TRAIN", "DATE", "WEBHOOK_URL")
+        missing = [k for k in required if not os.environ.get(k, "").strip()]
+        if missing:
+            log(f"缺少必要环境变量: {missing}", "ERROR")
+            sys.exit(1)
+        cfg = {
+            "train": os.environ["TRAIN"],
+            "date": os.environ["DATE"],
+            "seat": os.environ.get("SEAT", "硬卧"),
+            "from_stations": json.loads(os.environ.get("FROM_STATIONS", '["北京"]')),
+            "to_stations": json.loads(os.environ.get("TO_STATIONS", '["哈尔滨西"]')),
+            "alert_threshold": int(os.environ.get("THRESHOLD", "5")),
+            "poll_interval_seconds": 180,
+            "heartbeat_hours": 6,
+            "push": {"type": "wecom", "wecom_webhook": os.environ["WEBHOOK_URL"]},
+        }
+    elif not os.path.exists(CONFIG_PATH):
         log(f"找不到配置文件 {CONFIG_PATH}", "ERROR")
         sys.exit(1)
-    cfg = load_config()
+    else:
+        cfg = load_config()
 
     # 云端模式: 用环境变量覆盖配置, 状态持久化, 单次执行
     if cloud:
