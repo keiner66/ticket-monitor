@@ -1,0 +1,44 @@
+name: ticket-monitor
+
+# 每 10 分钟查一次(UTC 时间,与北京时间同频)
+# 也可在 GitHub 仓库 Actions 页面手动触发(workflow_dispatch)
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+# 防止上次还没跑完下一次又开始(查询间隔已足够,此处仅保险)
+concurrency:
+  group: ticket-monitor
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run ticket monitor
+        env:
+          WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
+          TRAIN: 'Z67'
+          DATE: '2026-08-26'
+          SEAT: '软卧'
+          FROM_STATIONS: '["北京","北京西","北京东"]'
+          TO_STATIONS: '["哈尔滨西","哈尔滨"]'
+          THRESHOLD: '5'
+        run: python3 ticket_monitor.py --cloud
+
+      # 把 last_status.json 状态文件提交回仓库,供下次运行比对(状态变化才推送)
+      - name: Persist state
+        run: |
+          if ! git diff --quiet; then
+            git config user.name "monitor-bot"
+            git config user.email "monitor-bot@users.noreply.github.com"
+            git add -A
+            git commit -m "update monitor state"
+            git push origin HEAD:main
+          fi
